@@ -1,0 +1,54 @@
+name: windows-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_zip:
+        description: Exact project ZIP path in the repository
+        required: true
+        default: FFS_Controller_Bridge_UIDiag_v7_CI.zip
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      PYTHONUTF8: "1"
+      PROJECT_ZIP: ${{ inputs.project_zip }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: x64
+
+      - name: Extract selected project and record checksum
+        run: |
+          test -f "$PROJECT_ZIP"
+          sha256sum "$PROJECT_ZIP" | tee archive-sha256.txt
+          rm -rf FFS_Controller_Bridge
+          unzip -q -o "$PROJECT_ZIP"
+          mkdir -p FFS_Controller_Bridge/out
+          cp archive-sha256.txt FFS_Controller_Bridge/out/
+
+      - name: Run all checks
+        working-directory: FFS_Controller_Bridge
+        run: python tools/ci_checks.py
+
+      - name: Upload results even if checks fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-results
+          path: |
+            FFS_Controller_Bridge/out/
+            archive-sha256.txt
